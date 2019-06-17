@@ -1,4 +1,3 @@
-
 process.env.NODE_ENV = 'test'
 
 var assert = require('assert')
@@ -325,7 +324,10 @@ describe('csurf', function () {
 
   describe('with "ignoreMethods" option', function () {
     it('should reject invalid value', function () {
-      assert.throws(createServer.bind(null, { ignoreMethods: 'tj' }), /option ignoreMethods/)
+      assert.throws(
+        createServer.bind(null, { ignoreMethods: 'tj' }),
+        /option ignoreMethods/
+      )
     })
 
     it('should not check token on given methods', function (done) {
@@ -345,6 +347,42 @@ describe('csurf', function () {
                 .put('/')
                 .set('Cookie', cookie)
                 .expect(403, done)
+            })
+        })
+    })
+  })
+
+  describe('with "whitelist" option', function () {
+    it('should not check token on given requests', function (done) {
+      var server = createServer({
+        whitelist: req => {
+          return ['login', 'signup'].some(whitelistPath =>
+            req.url.endsWith(whitelistPath)
+          )
+        }
+      })
+
+      request(server)
+        .get('/')
+        .expect(200, function (err, res) {
+          if (err) return done(err)
+          var token = res.text
+          var cookie = cookies(res)
+
+          request(server)
+            .post('/login')
+            .expect(200, function (err, res) {
+              if (err) return done(err)
+              request(server)
+                .post('/')
+                .set('Cookie', cookie)
+                .set('X-CSRF-Token', token)
+                .expect(200, function (err, res) {
+                  if (err) return done(err)
+                  request(server)
+                    .post('/')
+                    .expect(403, done)
+                })
             })
         })
     })
@@ -477,9 +515,11 @@ function cookie (res, name) {
 }
 
 function cookies (res) {
-  return res.headers['set-cookie'].map(function (cookies) {
-    return cookies.split(';')[0]
-  }).join(';')
+  return res.headers['set-cookie']
+    .map(function (cookies) {
+      return cookies.split(';')[0]
+    })
+    .join(';')
 }
 
 function createServer (opts) {
